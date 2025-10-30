@@ -29,11 +29,6 @@
           <input class="form-control" type="file" id="file2" accept=".xlsx,.xls,.csv" />
         </div>
 
-    <div class="col-12 mt-2">
-          <button type="button" id="loadSheetsBtn" class="btn btn-primary">Load Data from Sheets</button>
-          <button type="button" id="resetBtn" class="btn btn-link">Reset</button>
-        </div>
-
         <div class="col-md-6">
           <label class="form-label">Select sheet (File-1)</label>
           <select id="sheetSel1" class="form-select"></select>
@@ -43,7 +38,11 @@
           <select id="sheetSel2" class="form-select"></select>
         </div>
 
-    
+        <div class="col-12 mt-2">
+          <button type="button" id="loadSheetsBtn" class="btn btn-primary">Load All Sheets</button>
+          <button type="button" id="loadSelectedBtn" class="btn btn-secondary">Load Selected Sheet Data</button>
+          <button type="button" id="resetBtn" class="btn btn-link">Reset</button>
+        </div>
       </form>
     </div>
   </div>
@@ -111,6 +110,7 @@ const file2El = document.getElementById('file2');
 const sheetSel1 = document.getElementById('sheetSel1');
 const sheetSel2 = document.getElementById('sheetSel2');
 const loadSheetsBtn = document.getElementById('loadSheetsBtn');
+const loadSelectedBtn = document.getElementById('loadSelectedBtn');
 const resetBtn = document.getElementById('resetBtn');
 const mainControls = document.getElementById('mainControls');
 const targetColSel = document.getElementById('targetCol');
@@ -219,6 +219,7 @@ function sortRowsByFirstColumn(data){
   return [header,...rows];
 }
 
+// Load All Sheets
 loadSheetsBtn.addEventListener('click', async ()=>{
   if(!file1El.files[0]||!file2El.files[0]){ showAlert('Please select both files','warning'); return;}
   try{
@@ -229,38 +230,45 @@ loadSheetsBtn.addEventListener('click', async ()=>{
     file1Sheets.forEach((s,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=`${i+1}: ${s.name}`; sheetSel1.appendChild(o); });
     file2Sheets.forEach((s,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=`${i+1}: ${s.name}`; sheetSel2.appendChild(o); });
 
-    // get selected sheets
-    const arr1 = trimEmptyRowsAndCols(file1Sheets[parseInt(sheetSel1.value)].array);
-    const arr2 = trimEmptyRowsAndCols(file2Sheets[parseInt(sheetSel2.value)].array);
-
-    // detect header
-    const header1 = isNaN(parseFloat(arr1[0][0])) ? arr1[0] : arr1[0].map((_,i)=>`Col ${i+1}`);
-    const header2 = isNaN(parseFloat(arr2[0][0])) ? arr2[0] : arr2[0].map((_,i)=>`Col ${i+1}`);
-
-    // detect numeric rows (skip header)
-    function getNumericRows(arr){
-      const startRow = isNaN(parseFloat(arr[0][0])) ? 1 : 0;
-      const numericRows=[];
-      for(let i=startRow;i<arr.length;i++){
-        if(!isNaN(parseFloat(arr[i][0]))) numericRows.push(arr[i]);
-      }
-      return numericRows;
-    }
-    file1Data = [header1, ...getNumericRows(arr1)];
-    file2Data = [header2, ...getNumericRows(arr2)];
-
-    infoArea.innerHTML = `<div class="alert alert-info">File-1 numeric rows: ${file1Data.length-1}, File-2 numeric rows: ${file2Data.length-1}</div>`;
-
-    // populate column selectors
-    fillSelectors(header1, header2);
-
-    preview1Div.innerHTML = renderPreview(file1Data);
-    preview2Div.innerHTML = renderPreview(file2Data);
-    mainControls.classList.remove('d-none');
-
+    showAlert('Sheets loaded. Now select sheets and click "Load Selected Sheet Data".','success');
   }catch(err){ console.error(err); showAlert(err.message,'danger'); }
 });
 
+// Load Selected Sheet Data
+loadSelectedBtn.addEventListener('click', ()=>{
+  if(!file1Sheets || !file2Sheets) { showAlert('Please load sheets first','warning'); return; }
+
+  const f1Index = parseInt(sheetSel1.value);
+  const f2Index = parseInt(sheetSel2.value);
+
+  const arr1 = trimEmptyRowsAndCols(file1Sheets[f1Index].array);
+  const arr2 = trimEmptyRowsAndCols(file2Sheets[f2Index].array);
+
+  const header1 = isNaN(parseFloat(arr1[0][0])) ? arr1[0] : arr1[0].map((_,i)=>`Col ${i+1}`);
+  const header2 = isNaN(parseFloat(arr2[0][0])) ? arr2[0] : arr2[0].map((_,i)=>`Col ${i+1}`);
+
+  function getNumericRows(arr){
+    const startRow = isNaN(parseFloat(arr[0][0])) ? 1 : 0;
+    const numericRows=[];
+    for(let i=startRow;i<arr.length;i++){
+      if(!isNaN(parseFloat(arr[i][0]))) numericRows.push(arr[i]);
+    }
+    return numericRows;
+  }
+
+  file1Data = [header1, ...getNumericRows(arr1)];
+  file2Data = [header2, ...getNumericRows(arr2)];
+
+  infoArea.innerHTML = `<div class="alert alert-info">File-1 numeric rows: ${file1Data.length-1}, File-2 numeric rows: ${file2Data.length-1}</div>`;
+
+  fillSelectors(header1, header2);
+
+  preview1Div.innerHTML = renderPreview(file1Data);
+  preview2Div.innerHTML = renderPreview(file2Data);
+  mainControls.classList.remove('d-none');
+});
+
+// Reset
 resetBtn.addEventListener('click', ()=>{
   file1El.value=''; file2El.value='';
   preview1Div.innerHTML=''; preview2Div.innerHTML='';
@@ -268,6 +276,7 @@ resetBtn.addEventListener('click', ()=>{
   file1Sheets=file2Sheets=file1Data=file2Data=finalData=null;
 });
 
+// Process & Copy
 function processData(download=true){
   if(!file1Data||!file2Data){ showAlert('Load numeric rows first','warning'); return; }
   const target = parseInt(targetColSel.value,10);
@@ -278,7 +287,6 @@ function processData(download=true){
 
   const sorted = sortRowsByFirstColumn([file1Data[0], ...file1Data.slice(1, minLength+1)]).slice(1);
 
-  // Copy column and track replaced cells
   sorted.forEach((row,i)=>row[target] = file2Data[i+1][source]);
 
   finalData = [file1Data[0], ...sorted];
