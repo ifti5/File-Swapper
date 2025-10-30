@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Merge Excel/CSV Columns — Browser</title>
+<title>Merge Excel/CSV Columns — Auto Numeric Rows</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -15,7 +15,7 @@
 </head>
 <body>
 <div class="container">
-  <h3 class="mb-3">Merge column from File-2 → File-1 (Browser-only)</h3>
+  <h3 class="mb-3">Merge column from File-2 → File-1 (Auto Numeric Rows)</h3>
 
   <div class="card mb-3">
     <div class="card-body">
@@ -38,34 +38,8 @@
           <select id="sheetSel2" class="form-select"></select>
         </div>
 
-        <div class="col-md-12">
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="hasHeader" checked>
-            <label class="form-check-label" for="hasHeader">First row is header</label>
-            <div class="small-note">Uncheck if files do not have headers; synthetic headers will be generated.</div>
-          </div>
-        </div>
-
-        <!-- Row-range selection -->
-        <div class="col-md-3">
-          <label class="form-label">File-1 Start Row</label>
-          <input type="number" id="f1StartRow" class="form-control" min="1" value="2" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">File-1 End Row</label>
-          <input type="number" id="f1EndRow" class="form-control" min="2" value="20" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">File-2 Start Row</label>
-          <input type="number" id="f2StartRow" class="form-control" min="1" value="2" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">File-2 End Row</label>
-          <input type="number" id="f2EndRow" class="form-control" min="2" value="20" />
-        </div>
-
-        <div class="col-12">
-          <button type="button" id="loadBtn" class="btn btn-primary">Load files & show columns</button>
+        <div class="col-12 mt-2">
+          <button type="button" id="loadSheetsBtn" class="btn btn-primary">Load Data from Sheets</button>
           <button type="button" id="resetBtn" class="btn btn-link">Reset</button>
         </div>
       </form>
@@ -85,7 +59,7 @@
             <label class="form-label">File-2 — Source column to copy</label>
             <select id="sourceCol" class="form-select"></select>
           </div>
-          <div class="col-12">
+          <div class="col-12 mt-2">
             <button type="button" class="btn btn-success" id="processBtn">Process & Download</button>
             <button type="button" class="btn btn-outline-secondary" id="previewBtn">Preview without download</button>
           </div>
@@ -134,8 +108,7 @@ const file1El = document.getElementById('file1');
 const file2El = document.getElementById('file2');
 const sheetSel1 = document.getElementById('sheetSel1');
 const sheetSel2 = document.getElementById('sheetSel2');
-const hasHeaderEl = document.getElementById('hasHeader');
-const loadBtn = document.getElementById('loadBtn');
+const loadSheetsBtn = document.getElementById('loadSheetsBtn');
 const resetBtn = document.getElementById('resetBtn');
 const mainControls = document.getElementById('mainControls');
 const targetColSel = document.getElementById('targetCol');
@@ -180,16 +153,11 @@ async function readWorkbookAndSheets(file){
   });
 }
 
-function isRowEmpty(row){
-  if(!row) return true;
-  return row.every(c=>c===null||c===undefined||String(c).trim()==='');
-}
-
 function trimEmptyRowsAndCols(arr){
   if(!arr||arr.length===0) return arr;
   let top=0,bottom=arr.length-1;
-  while(top<=bottom && isRowEmpty(arr[top])) top++;
-  while(bottom>=top && isRowEmpty(arr[bottom])) bottom--;
+  while(top<=bottom && arr[top].every(c=>c===null||c===undefined||String(c).trim()==='')) top++;
+  while(bottom>=top && arr[bottom].every(c=>c===null||c===undefined||String(c).trim()==='')) bottom--;
   if(top>bottom) return [];
   let trimmed = arr.slice(top,bottom+1);
   let maxCol=0;
@@ -204,7 +172,7 @@ function trimEmptyRowsAndCols(arr){
   return trimmed;
 }
 
-function renderPreview(arr, limit=20){
+function renderPreview(arr, limit=20, highlightCol=null){
   if(!arr||arr.length===0) return '<div class="small-note">No data</div>';
   const rows = arr.slice(0,limit);
   let html='<div style="overflow:auto;"><table class="table table-sm table-bordered mb-0"><thead><tr>';
@@ -214,7 +182,10 @@ function renderPreview(arr, limit=20){
   for(let r=1;r<rows.length;r++){
     html+='<tr>';
     for(let c=0;c<maxCols;c++){
-      html+=`<td>${rows[r][c]||''}</td>`;
+      const val = rows[r][c]||'';
+      let cls='';
+      if(highlightCol!==null && c===highlightCol) cls='replaced';
+      html+=`<td class="${cls}">${val}</td>`;
     }
     html+='</tr>';
   }
@@ -226,12 +197,12 @@ function fillSelectors(headers1, headers2){
   targetColSel.innerHTML=''; sourceColSel.innerHTML='';
   headers1.forEach((h,i)=>{
     const opt = document.createElement('option');
-    opt.value=i; opt.textContent=`${i+1}. ${h||'Col '+(i+1)}`;
+    opt.value=i; opt.textContent=`${h||'Col '+(i+1)}`;
     targetColSel.appendChild(opt);
   });
   headers2.forEach((h,i)=>{
     const opt = document.createElement('option');
-    opt.value=i; opt.textContent=`${i+1}. ${h||'Col '+(i+1)}`;
+    opt.value=i; opt.textContent=`${h||'Col '+(i+1)}`;
     sourceColSel.appendChild(opt);
   });
 }
@@ -246,7 +217,7 @@ function sortRowsByFirstColumn(data){
   return [header,...rows];
 }
 
-loadBtn.addEventListener('click', async ()=>{
+loadSheetsBtn.addEventListener('click', async ()=>{
   if(!file1El.files[0]||!file2El.files[0]){ showAlert('Please select both files','warning'); return;}
   try{
     file1Sheets = (await readWorkbookAndSheets(file1El.files[0])).sheets;
@@ -256,53 +227,61 @@ loadBtn.addEventListener('click', async ()=>{
     file1Sheets.forEach((s,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=`${i+1}: ${s.name}`; sheetSel1.appendChild(o); });
     file2Sheets.forEach((s,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=`${i+1}: ${s.name}`; sheetSel2.appendChild(o); });
 
-    const chosen1 = trimEmptyRowsAndCols(file1Sheets[parseInt(sheetSel1.value)].array);
-    const chosen2 = trimEmptyRowsAndCols(file2Sheets[parseInt(sheetSel2.value)].array);
-    const hasHeader = hasHeaderEl.checked;
-    const header1 = hasHeader?chosen1[0]:chosen1[0].map((_,i)=>`Col ${i+1}`);
-    const header2 = hasHeader?chosen2[0]:chosen2[0].map((_,i)=>`Col ${i+1}`);
-    file1Data = chosen1; file2Data = chosen2;
+    // get selected sheets
+    const arr1 = trimEmptyRowsAndCols(file1Sheets[parseInt(sheetSel1.value)].array);
+    const arr2 = trimEmptyRowsAndCols(file2Sheets[parseInt(sheetSel2.value)].array);
 
-    mainControls.classList.remove('d-none');
+    // detect header
+    const header1 = isNaN(parseFloat(arr1[0][0])) ? arr1[0] : arr1[0].map((_,i)=>`Col ${i+1}`);
+    const header2 = isNaN(parseFloat(arr2[0][0])) ? arr2[0] : arr2[0].map((_,i)=>`Col ${i+1}`);
+
+    // detect numeric rows (skip header)
+    function getNumericRows(arr){
+      const startRow = isNaN(parseFloat(arr[0][0])) ? 1 : 0;
+      const numericRows=[];
+      for(let i=startRow;i<arr.length;i++){
+        if(!isNaN(parseFloat(arr[i][0]))) numericRows.push(arr[i]);
+      }
+      return numericRows;
+    }
+    file1Data = [header1, ...getNumericRows(arr1)];
+    file2Data = [header2, ...getNumericRows(arr2)];
+
+    infoArea.innerHTML = `<div class="alert alert-info">File-1 numeric rows: ${file1Data.length-1}, File-2 numeric rows: ${file2Data.length-1}</div>`;
+
+    // populate column selectors
     fillSelectors(header1, header2);
-    preview1Div.innerHTML=renderPreview(file1Data);
-    preview2Div.innerHTML=renderPreview(file2Data);
-    infoArea.innerHTML=`<div class="alert alert-info">File-1 rows: ${file1Data.length-1}, File-2 rows: ${file2Data.length-1}</div>`;
+
+    preview1Div.innerHTML = renderPreview(file1Data);
+    preview2Div.innerHTML = renderPreview(file2Data);
+    mainControls.classList.remove('d-none');
+
   }catch(err){ console.error(err); showAlert(err.message,'danger'); }
 });
 
 resetBtn.addEventListener('click', ()=>{
-  file1El.value=''; file2El.value=''; preview1Div.innerHTML=''; preview2Div.innerHTML='';
-  mainControls.classList.add('d-none'); resultPreviewCard.classList.add('d-none'); file1Sheets=file2Sheets=file1Data=file2Data=finalData=null;
+  file1El.value=''; file2El.value='';
+  preview1Div.innerHTML=''; preview2Div.innerHTML='';
+  mainControls.classList.add('d-none'); resultPreviewCard.classList.add('d-none');
+  file1Sheets=file2Sheets=file1Data=file2Data=finalData=null;
 });
 
 function processData(download=true){
-  if(!file1Data||!file2Data){ showAlert('Load files first','warning'); return;}
-  const hasHeader = hasHeaderEl.checked;
+  if(!file1Data||!file2Data){ showAlert('Load numeric rows first','warning'); return; }
   const target = parseInt(targetColSel.value,10);
   const source = parseInt(sourceColSel.value,10);
 
-  // row range inputs
-  const f1Start = parseInt(document.getElementById('f1StartRow').value,10)-1;
-  const f1End = parseInt(document.getElementById('f1EndRow').value,10);
-  const f2Start = parseInt(document.getElementById('f2StartRow').value,10)-1;
-  const f2End = parseInt(document.getElementById('f2EndRow').value,10);
+  const minLength = Math.min(file1Data.length-1,file2Data.length-1); // exclude header
+  if(file1Data.length-1 !== file2Data.length-1){ showAlert('Row counts mismatch, operation will use min rows: '+minLength,'warning'); }
 
-  const d1 = file1Data.slice(f1Start,f1End).map(r=>r.slice());
-  const d2 = file2Data.slice(f2Start,f2End).map(r=>r.slice());
+  const sorted = sortRowsByFirstColumn([file1Data[0], ...file1Data.slice(1, minLength+1)]).slice(1);
 
-  if(d1.length!==d2.length){ showAlert('Selected row counts mismatch','warning'); return;}
+  // Copy column and track replaced cells
+  sorted.forEach((row,i)=>row[target] = file2Data[i+1][source]);
 
-  const sorted = sortRowsByFirstColumn([file1Data[0], ...d1]).slice(1);
-  sorted.forEach((row,i)=>row[target]=d2[i][source]);
+  finalData = [file1Data[0], ...sorted];
 
-  finalData = [
-    ...file1Data.slice(0,f1Start),
-    ...sorted,
-    ...file1Data.slice(f1End)
-  ];
-
-  resultPreviewDiv.innerHTML = renderPreview(finalData);
+  resultPreviewDiv.innerHTML = renderPreview(finalData,20,target); // highlight replaced column
   resultPreviewCard.classList.remove('d-none');
 
   if(download){
